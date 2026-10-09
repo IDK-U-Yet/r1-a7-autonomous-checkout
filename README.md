@@ -14,6 +14,20 @@ available single-product experiments.
 [中文说明](README_zh-CN.md) · [操作手册](使用手册.md) ·
 [Architecture](docs/architecture.md) · [Third-party sources](THIRD_PARTY_NOTICES.md)
 
+## Videos
+
+[![RTC versus non-RTC](docs/images/rtc-comparison-cover.jpg)](docs/videos/rtc-comparison.mp4)
+
+**Left: RTC. Right: non-RTC.** Click the cover to open the video file; download it
+if GitHub does not provide inline playback.
+
+[Demo 1](docs/videos/checkout-demo-1.mp4) · [Demo 2](docs/videos/checkout-demo-2.mp4) · [Video context](docs/videos/README.md)
+
+The maintainer confirms original-speed playback with original audio retained.
+These clips illustrate motion, not aggregate success rates. Checkpoint and
+configuration have not been independently verified for each clip; do not infer
+a timing improvement from the file duration alone.
+
 ## What is included
 
 - PICO controller teleoperation adapted for R1-A7 and Dex1, with a 16-dimensional
@@ -29,6 +43,35 @@ available single-product experiments.
 - Scanner-event interfaces. Barcode acceptance is an
   external event: it triggers the scan-to-placement task transition rather than
   being inferred from camera images alone.
+
+## Tool screenshots
+
+Four-camera dataset playback and annotation. Top row: global/scanner; bottom row:
+left/right wrist. Images are recorded data, not live camera feeds.
+
+![Dataset playback and annotation](docs/images/dataset-review-overview.jpg)
+
+[Scan-event frame](docs/images/dataset-review.jpg) · [Collection console, offline](docs/images/collection-console-offline.jpg) · [Screenshot context](docs/images/README.md)
+
+The collection screenshot shows actual completed-batch progress and historical
+logs. Live camera services were offline during capture; no live-feed claim is made.
+
+## Workflow and entry points
+
+| Workflow | Documentation | Entry point |
+| --- | --- | --- |
+| Teleoperation and collection | [Operation manual](使用手册.md) | `scripts/start-teleop.sh` |
+| Collection dashboard | [Console](apps/r1-collection-console/README.md) | `scripts/start-collection-console.sh` |
+| Playback and annotation | [Dataset review](apps/r1-dataset-review/README.md) | `scripts/start-dataset-review.sh` |
+| Dataset preparation and training | [Training/deployment](docs/r1a7-lerobot-pi05.md) | `scripts/lerobot/` |
+| Expert takeover | [DAgger collection](docs/r1a7-dagger-接管采集.md) | `scripts/lerobot/run-r1a7-pi05-dagger.sh` |
+| Guided RTC | [RTC design](docs/r1a7-rtc-spec.md) | `scripts/lerobot/run-r1a7-pi05-rtc-real.sh` |
+
+See the [system architecture](docs/architecture.md) for the data/training/deployment
+loop. Teleoperation maps end-effector poses through IK; policy inference outputs
+joint/gripper targets directly. Scanner acceptance is an external event, not an
+additional numeric policy input. Annotation labels do not enable high-level
+subtask-text generation.
 
 ## Layout
 
