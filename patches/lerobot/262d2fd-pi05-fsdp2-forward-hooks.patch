@@ -1,0 +1,95 @@
+diff --git a/src/lerobot/policies/pi05/modeling_pi05.py b/src/lerobot/policies/pi05/modeling_pi05.py
+index 20293a1..b24ad21 100644
+--- a/src/lerobot/policies/pi05/modeling_pi05.py
++++ b/src/lerobot/policies/pi05/modeling_pi05.py
+@@ -424,7 +424,31 @@ class PaliGemmaWithExpertModel(
+         inputs_embeds: list[torch.FloatTensor] | None = None,
+         use_cache: bool | None = None,
+         adarms_cond: list[torch.Tensor] | None = None,
++        operation: Literal["model", "embed_image", "embed_language_tokens"] = "model",
++        image: torch.Tensor | None = None,
++        frame_mask: torch.Tensor | None = None,
++        temporal_attention_every: int = 4,
++        tokens: torch.Tensor | None = None,
+     ):
++        # FSDP2 installs its all-gather/reshard hooks on nn.Module.__call__.
++        # Keep every parameter-using entry point behind forward() so callers do
++        # not bypass those hooks by invoking helper methods directly.
++        if operation == "embed_image":
++            if image is None:
++                raise ValueError("image is required for operation='embed_image'")
++            return self.embed_image(
++                image,
++                frame_mask=frame_mask,
++                temporal_attention_every=temporal_attention_every,
++            )
++        if operation == "embed_language_tokens":
++            if tokens is None:
++                raise ValueError("tokens are required for operation='embed_language_tokens'")
++            return self.embed_language_tokens(tokens)
++        if operation != "model":
++            raise ValueError(f"Unsupported operation: {operation}")
++        if inputs_embeds is None:
++            raise ValueError("inputs_embeds is required for operation='model'")
+         if adarms_cond is None:
+             adarms_cond = [None, None]
+         if inputs_embeds[1] is None:
+@@ -619,12 +643,16 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
+ 
+             def image_embed_func(img, img_mask):
+                 if img.ndim == 5:
+-                    return self.paligemma_with_expert.embed_image(
+-                        img,
++                    return self.paligemma_with_expert(
++                        operation="embed_image",
++                        image=img,
+                         frame_mask=img_mask,
+                         temporal_attention_every=self.config.memory_temporal_attention_every,
+                     )
+-                return self.paligemma_with_expert.embed_image(img)
++                return self.paligemma_with_expert(
++                    operation="embed_image",
++                    image=img,
++                )
+ 
+             img_emb = self._apply_checkpoint(image_embed_func, img, img_mask)
+             bsize, num_img_embs = img_emb.shape[:2]
+@@ -645,7 +673,10 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
+ 
+         # Process language tokens
+         def lang_embed_func(tokens):
+-            lang_emb = self.paligemma_with_expert.embed_language_tokens(tokens)
++            lang_emb = self.paligemma_with_expert(
++                operation="embed_language_tokens",
++                tokens=tokens,
++            )
+             return lang_emb
+ 
+         lang_emb = self._apply_checkpoint(lang_embed_func, tokens)
+@@ -741,7 +772,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
+         att_2d_masks_4d = prepare_attention_masks_4d(att_2d_masks)
+ 
+         def forward_func(prefix_embs, suffix_embs, att_2d_masks_4d, position_ids, adarms_cond):
+-            (_, suffix_out), _ = self.paligemma_with_expert.forward(
++            (_, suffix_out), _ = self.paligemma_with_expert(
+                 attention_mask=att_2d_masks_4d,
+                 position_ids=position_ids,
+                 past_key_values=None,
+@@ -803,7 +834,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
+         prefix_att_2d_masks_4d = prepare_attention_masks_4d(prefix_att_2d_masks)
+         self.paligemma_with_expert.paligemma.model.language_model.config._attn_implementation = "eager"  # noqa: SLF001
+ 
+-        _, past_key_values = self.paligemma_with_expert.forward(
++        _, past_key_values = self.paligemma_with_expert(
+             attention_mask=prefix_att_2d_masks_4d,
+             position_ids=prefix_position_ids,
+             past_key_values=None,
+@@ -872,7 +903,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
+         self.paligemma_with_expert.gemma_expert.model.config._attn_implementation = "eager"  # noqa: SLF001
+ 
+         past_key_values = clone_past_key_values(past_key_values)
+-        outputs_embeds, _ = self.paligemma_with_expert.forward(
++        outputs_embeds, _ = self.paligemma_with_expert(
+             attention_mask=full_att_2d_masks_4d,
+             position_ids=position_ids,
+             past_key_values=past_key_values,

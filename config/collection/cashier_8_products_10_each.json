@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "batch_id": "cashier_4cam_batch_01",
+  "selection_mode": "flexible",
+  "reset_seconds": 30,
+  "products": [
+    {
+      "barcode": "6933949903337",
+      "sku": "SKU-BG-01",
+      "name": "黑松露火腿饼干",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6920999707541",
+      "sku": "SKU-FSL-01",
+      "name": "大宝防晒露",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6933949903689",
+      "sku": "SKU-BG-02",
+      "name": "可可黄油华夫脆",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6931745841006",
+      "sku": "SKU-BG-03",
+      "name": "黄油猫酪饼",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6921168563869",
+      "sku": "SKU-S-01",
+      "name": "电解质水",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6941750501192",
+      "sku": "SKU-SB-01",
+      "name": "迈从鼠标",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6922266474804",
+      "sku": "SKU-ZJ-01",
+      "name": "清风纸巾",
+      "target_episodes": 10
+    },
+    {
+      "barcode": "6921168558032",
+      "sku": "SKU-YL-01",
+      "name": "东方树叶",
+      "target_episodes": 10
+    }
+  ]
+}

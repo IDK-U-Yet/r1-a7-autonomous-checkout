@@ -1,0 +1,83 @@
+format = 2
+layout = "monorepo"
+generated_at = "2026-08-24T19:49:16+08:00"
+
+[monorepo]
+name = "r1a7-system"
+note = "The main repository commit is the authoritative system version. Source entries record import provenance only."
+
+[[source]]
+path = "robot/xr-teleoperate"
+upstream = "https://github.com/unitreerobotics/xr_teleoperate.git"
+upstream_base_commit = "845b25a32f7febedf220e830952a7134897adb9d"
+imported_commit = "340995a7b9b1d53d491f115c21344656afa070a2"
+former_branch = "r1-a7-pico"
+local_changes_in_monorepo = true
+
+[[source]]
+path = "robot/xr-teleoperate/teleop/teleimager"
+upstream = "https://github.com/unitreerobotics/teleimager.git"
+upstream_base_commit = "57cf2a40572227273fa001cd17833b755331ec97"
+imported_commit = "57cf2a40572227273fa001cd17833b755331ec97"
+former_branch = "r1-a7-cameras"
+local_changes_in_monorepo = true
+
+[[source]]
+path = "robot/xr-teleoperate/teleop/televuer"
+upstream = "https://github.com/unitreerobotics/televuer"
+upstream_base_commit = "766de45e74373ae0ea66321d942ce538385655a5"
+imported_commit = "fee0c1d54b51e843df0ffdbc4248060a22b71f71"
+former_branch = "r1-a7-pico-safety"
+local_changes_in_monorepo = true
+
+[[source]]
+path = "robot/xr-teleoperate/teleop/robot_control/dex-retargeting"
+upstream = "https://github.com/silencht/dex-retargeting"
+upstream_base_commit = "d7753d38c9ff11f80bafea6cd168351fd3db9b0e"
+imported_commit = "d7753d38c9ff11f80bafea6cd168351fd3db9b0e"
+local_changes_in_monorepo = false
+
+[[source]]
+path = "robot/dex1-service"
+upstream = "https://github.com/unitreerobotics/dex1_1_service.git"
+upstream_base_commit = "2986d26eefa4136d4777493e6fd0b8bac7a4c6ae"
+imported_commit = "2c7469deb25bbc9de110abb227a67812b31f6efb"
+former_branch = "r1-a7-pico-safety"
+local_changes_in_monorepo = true
+
+[[source]]
+path = "data/unitree-lerobot"
+upstream = "https://github.com/unitreerobotics/unitree_lerobot.git"
+upstream_base_commit = "41c2805742de879ddab2d8d6beaeaf215f876395"
+imported_commit = "41c2805742de879ddab2d8d6beaeaf215f876395"
+former_branch = "r1-a7-dataset"
+local_changes_in_monorepo = true
+lfs_assets_materialized = true
+uniarml1_asset_recovery_upstream = "https://github.com/unitreerobotics/UniArmL1.git"
+uniarml1_asset_recovery_commit = "330c0410a272c1f0d358991e0f86dd3114159551"
+asset_recovery_verification = "Recovered files matched the SHA-256 object IDs recorded by the imported LFS pointers."
+
+[[source]]
+path = "data/unitree-lerobot/unitree_lerobot/lerobot"
+upstream = "https://github.com/huggingface/lerobot"
+upstream_base_commit = "a5b29d430105f5235eb05bbf2db5a0d747a869d6"
+imported_commit = "a5b29d430105f5235eb05bbf2db5a0d747a869d6"
+local_changes_in_monorepo = false
+
+[[source]]
+path = "vendor/unitree-sdk2"
+upstream = "https://github.com/unitreerobotics/unitree_sdk2.git"
+upstream_base_commit = "69c04316d81ac244c314e730106e24787b3e61b8"
+imported_commit = "69c04316d81ac244c314e730106e24787b3e61b8"
+local_changes_in_monorepo = false
+
+[[source]]
+path = "vendor/unitree-sdk2-python"
+upstream = "https://github.com/unitreerobotics/unitree_sdk2_python.git"
+upstream_base_commit = "65691c8a8bc53b98d3976dba4dbf9d5d20b2e7f5"
+imported_commit = "65691c8a8bc53b98d3976dba4dbf9d5d20b2e7f5"
+local_changes_in_monorepo = false
+
+[excluded]
+repositories = ["unitree_sim_isaaclab"]
+reason = "Not required for physical R1-A7 data collection."

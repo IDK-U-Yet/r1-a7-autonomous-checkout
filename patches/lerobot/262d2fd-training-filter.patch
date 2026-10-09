@@ -1,0 +1,150 @@
+diff --git a/src/lerobot/configs/default.py b/src/lerobot/configs/default.py
+index d767d01b..8507cd82 100644
+--- a/src/lerobot/configs/default.py
++++ b/src/lerobot/configs/default.py
+@@ -55,6 +55,8 @@ class DatasetConfig:
+     streaming: bool = False
+     # Fraction of episodes held out per task for offline evaluation (0.0 = disabled).
+     eval_split: float = 0.0
++    # Optional audit manifest containing absolute frame-index ranges to skip during training.
++    training_filter_path: str | None = None
+ 
+     def __post_init__(self) -> None:
+         if self.repo_type not in ("dataset", "bucket"):
+diff --git a/src/lerobot/datasets/sampler.py b/src/lerobot/datasets/sampler.py
+index aee6ce46..5069cd04 100644
+--- a/src/lerobot/datasets/sampler.py
++++ b/src/lerobot/datasets/sampler.py
+@@ -54,6 +54,7 @@ class EpisodeAwareSampler:
+         shuffle: bool = False,
+         seed: int = 0,
+         absolute_to_relative_idx: dict[int, int] | None = None,
++        excluded_ranges: list[tuple[int, int]] | None = None,
+     ):
+         """
+         Args:
+@@ -104,12 +105,30 @@ class EpisodeAwareSampler:
+         self._starts = starts[used]
+         self._cum_lengths = np.cumsum(lengths[used])
+         self._num_frames = int(self._cum_lengths[-1])
++        self._explicit_indices: np.ndarray | None = None
+         self.shuffle = shuffle
+         self.seed = seed
+         self._epoch = 0
+         self._start_index = 0
+         self._absolute_to_relative = absolute_to_relative_idx
+ 
++        if excluded_ranges:
++            excluded = np.zeros(int(to_indices.max()), dtype=bool)
++            for start, end in excluded_ranges:
++                if start < 0 or end <= start or end > len(excluded):
++                    raise ValueError(f"invalid excluded range [{start}, {end})")
++                excluded[start:end] = True
++            absolute = np.concatenate(
++                [np.arange(start, start + length) for start, length in zip(self._starts, lengths[used])]
++            )
++            absolute = absolute[~excluded[absolute]]
++            if self._absolute_to_relative is not None:
++                absolute = np.asarray(
++                    [self._absolute_to_relative[int(index)] for index in absolute], dtype=np.int64
++                )
++            self._explicit_indices = absolute
++            self._num_frames = len(absolute)
++
+     @property
+     def indices(self) -> list[int]:
+         """Materialized frame indices in unshuffled order; O(num_frames), introspection only."""
+@@ -132,6 +151,8 @@ class EpisodeAwareSampler:
+         return torch.Generator().manual_seed(epoch_seed)
+ 
+     def _frame_index(self, position: int) -> int:
++        if self._explicit_indices is not None:
++            return int(self._explicit_indices[position])
+         episode = int(np.searchsorted(self._cum_lengths, position, side="right"))
+         position_in_episode = position - (int(self._cum_lengths[episode - 1]) if episode > 0 else 0)
+         absolute_idx = int(self._starts[episode]) + position_in_episode
+diff --git a/src/lerobot/scripts/lerobot_train.py b/src/lerobot/scripts/lerobot_train.py
+index 0098213c..151102fe 100644
+--- a/src/lerobot/scripts/lerobot_train.py
++++ b/src/lerobot/scripts/lerobot_train.py
+@@ -29,11 +29,13 @@ torchrun --nproc-per-node=8 $(which lerobot-train) \
+ """
+ 
+ import dataclasses
++import json
+ import logging
+ import sys
+ import time
+ from collections.abc import Iterator
+ from contextlib import contextmanager, nullcontext
++from pathlib import Path
+ from pprint import pformat
+ from typing import TYPE_CHECKING, Any
+ 
+@@ -284,6 +286,27 @@ def make_dataloaders(
+     """
+     active_cfg = cfg.trainable_config
+     if not cfg.dataset.streaming:
++        excluded_ranges = None
++        if cfg.dataset.training_filter_path:
++            filter_path = Path(cfg.dataset.training_filter_path)
++            with filter_path.open(encoding="utf-8") as stream:
++                filter_payload = json.load(stream)
++            if int(filter_payload["total_frames"]) != dataset.meta.total_frames:
++                raise ValueError(
++                    f"training filter total_frames={filter_payload['total_frames']} does not match "
++                    f"dataset total_frames={dataset.meta.total_frames}"
++                )
++            excluded_ranges = [
++                (int(row["dataset_start"]), int(row["dataset_end_exclusive"]))
++                for row in filter_payload["excluded_ranges"]
++            ]
++            if is_main_process():
++                logging.info(
++                    "Loaded training filter %s: excluding %s/%s sample starts",
++                    filter_path,
++                    filter_payload["excluded_training_starts"],
++                    filter_payload["total_frames"],
++                )
+         # All non-streaming (map-style) datasets use EpisodeAwareSampler.
+         # The order is a pure function of (seed, epoch), so every rank independently produces the
+         # same permutation. accelerate then shards it disjointly across data-parallel ranks via
+@@ -298,6 +321,7 @@ def make_dataloaders(
+             shuffle=True,
+             seed=cfg.seed if cfg.seed is not None else 0,
+             absolute_to_relative_idx=dataset.absolute_to_relative_idx,
++            excluded_ranges=excluded_ranges,
+         )
+         if cfg.resume and step > 0:
+             # The resume offset depends on the (dp_world_size, batch_size) that produced `step`,
+diff --git a/tests/datasets/test_sampler.py b/tests/datasets/test_sampler.py
+index dbe2eb7f..3082d925 100644
+--- a/tests/datasets/test_sampler.py
++++ b/tests/datasets/test_sampler.py
+@@ -114,6 +114,26 @@ def test_shuffle():
+     assert set(sampler) == {0, 1, 2, 3, 4, 5}
+ 
+ 
++def test_excluded_absolute_ranges():
++    sampler = EpisodeAwareSampler(
++        [0, 5], [5, 10], excluded_ranges=[(2, 4), (7, 9)], shuffle=False
++    )
++    assert sampler.indices == [0, 1, 4, 5, 6, 9]
++    assert len(sampler) == 6
++
++
++def test_excluded_ranges_apply_before_absolute_to_relative_mapping():
++    sampler = EpisodeAwareSampler(
++        [0, 5],
++        [5, 10],
++        episode_indices_to_use=[1],
++        excluded_ranges=[(7, 9)],
++        absolute_to_relative_idx={5: 0, 6: 1, 7: 2, 8: 3, 9: 4},
++        shuffle=False,
++    )
++    assert sampler.indices == [0, 1, 4]
++
++
+ def test_shuffle_is_reproducible_across_instances():
+     # The order is a pure function of (seed, epoch), so two fresh samplers (e.g. two ranks)
+     # produce the same permutation without any generator synchronization.

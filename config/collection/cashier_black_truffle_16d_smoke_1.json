@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "batch_id": "cashier_4cam_black_truffle_16d_smoke_01",
+  "selection_mode": "ordered",
+  "reset_seconds": 0,
+  "products": [
+    {
+      "barcode": "6933949903337",
+      "sku": "SKU-BG-01",
+      "name": "黑松露火腿饼干",
+      "target_episodes": 1
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# Local runtime state and deployment snapshots
+/runtime/
+
+# Local secrets. Keep checked-in examples available.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Application-generated state
+/apps/r1-supermarket/.venv/
+/apps/r1-supermarket/data/
+/apps/r1-supermarket/logs/
+/apps/r1-supermarket/backups/
+/apps/r1-supermarket/frontend/node_modules/
+/apps/r1-supermarket/frontend/dist/
+/apps/r1-collection-console/frontend/node_modules/
+/apps/r1-collection-console/frontend/dist/
+
+# Robot diagnostics and generated datasets
+/robot/xr-teleoperate/teleop/logs/
+/robot/xr-teleoperate/teleop/data/
+
+# Local model training runs and checkpoints
+/outputs/
+
+# Common generated files
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/*.py[cod]
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+.DS_Store
+.idea/
+.vscode/
+
+# Public-release boundaries
+.codex/
+.agents/
+**/local_documents/
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/credentials.json
+**/secrets.json

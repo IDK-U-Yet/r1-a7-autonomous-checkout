@@ -1,0 +1,111 @@
+diff --git a/src/lerobot/configs/train.py b/src/lerobot/configs/train.py
+--- a/src/lerobot/configs/train.py
++++ b/src/lerobot/configs/train.py
+@@ -141,4 +141,8 @@ class TrainPipelineConfig(HubMixin):
+     # A non-positive value disables periodic saving, keeping only the final checkpoint.
+     save_freq: int = 20_000
++    # Retain only the newest N completed checkpoints after each successful save. Zero disables
++    # automatic pruning. Explicit milestone steps and the `last` symlink target are always kept.
++    checkpoint_keep_last: int = 0
++    checkpoint_keep_steps: list[int] = field(default_factory=list)
+     # Model-artifact format inside checkpoints; non-default values require a sharded run.
+     checkpoint_format: CheckpointFormat = CheckpointFormat.SAFETENSORS
+@@ -285,6 +289,10 @@ class TrainPipelineConfig(HubMixin):
+         elif self.use_policy_training_preset and not self.resume:
+             self.optimizer = active_cfg.get_optimizer_preset()
+             self.scheduler = active_cfg.get_scheduler_preset()
+
++        if self.checkpoint_keep_last < 0:
++            raise ValueError("checkpoint_keep_last must be non-negative")
++        if any(step < 0 for step in self.checkpoint_keep_steps):
++            raise ValueError("checkpoint_keep_steps must contain only non-negative steps")
+         if self.eval_steps > 0 and self.dataset.eval_split == 0.0:
+             raise ValueError("eval_steps > 0 requires dataset.eval_split > 0.0 to hold out eval data.")
+diff --git a/src/lerobot/common/train_utils.py b/src/lerobot/common/train_utils.py
+--- a/src/lerobot/common/train_utils.py
++++ b/src/lerobot/common/train_utils.py
+@@ -15,5 +15,6 @@ sit under one grouped ``is_main_process()`` gate per contiguous region, placed b
+ """
+
+ import logging
++import shutil
+ from importlib.resources import files
+ from pathlib import Path
+@@ -119,6 +120,58 @@ def update_last_checkpoint(checkpoint_dir: Path) -> None:
+     last_checkpoint_dir.symlink_to(relative_target)
+
+
++def _checkpoint_is_complete(checkpoint_dir: Path) -> bool:
++    """Return true only when model and optimizer state needed for resume are present."""
++    pretrained_dir = checkpoint_dir / PRETRAINED_MODEL_DIR
++    training_state_dir = checkpoint_dir / TRAINING_STATE_DIR
++    if not (pretrained_dir / "train_config.json").is_file():
++        return False
++    if not (training_state_dir / TRAINING_STEP).is_file():
++        return False
++    model_ok = (pretrained_dir / "model.safetensors").is_file() or any(
++        child.is_dir()
++        and child.name.startswith("pytorch_model_fsdp_")
++        and any(item.is_file() for item in child.rglob("*"))
++        for child in pretrained_dir.iterdir()
++    )
++    optimizer_ok = (training_state_dir / "optimizer_state.safetensors").is_file() or any(
++        child.is_dir()
++        and child.name.startswith("optimizer_")
++        and any(item.is_file() for item in child.rglob("*"))
++        for child in training_state_dir.iterdir()
++    )
++    return model_ok and optimizer_ok
++
++
++def prune_old_checkpoints(checkpoint_dir: Path, keep_last: int, keep_steps: list[int]) -> None:
++    """Delete old completed checkpoints after a newer save has been published via `last`.
++
++    This function is rank-0-only and must be called after ``update_last_checkpoint``. Incomplete
++    directories are never deleted, and the current `last` target is always protected.
++    """
++    if keep_last <= 0:
++        return
++    checkpoints_dir = checkpoint_dir.parent
++    completed = sorted(
++        (
++            (int(path.name), path)
++            for path in checkpoints_dir.iterdir()
++            if path.is_dir() and path.name.isdigit() and _checkpoint_is_complete(path)
++        ),
++        key=lambda item: item[0],
++    )
++    protected = {path for _, path in completed[-keep_last:]}
++    protected.update(path for step, path in completed if step in set(keep_steps))
++    last_link = checkpoints_dir / LAST_CHECKPOINT_LINK
++    if last_link.is_symlink():
++        protected.add(last_link.resolve())
++    for step, path in completed:
++        if path in protected:
++            continue
++        shutil.rmtree(path)
++        logging.info("Pruned completed checkpoint step %d at %s", step, path)
++
++
+ # ---------------------------------------------------------------------------------------------
+ # training_step.json
+ # ---------------------------------------------------------------------------------------------
+diff --git a/src/lerobot/scripts/lerobot_train.py b/src/lerobot/scripts/lerobot_train.py
+--- a/src/lerobot/scripts/lerobot_train.py
++++ b/src/lerobot/scripts/lerobot_train.py
+@@ -47,4 +47,5 @@ from lerobot.common.train_utils import (
+     load_training_metadata,
+     publish_trained_model,
++    prune_old_checkpoints,
+     push_checkpoint_to_hub,
+     resume_after_prepare,
+@@ -780,4 +781,9 @@ def train(cfg: TrainPipelineConfig):
+                         postprocessor.save_pretrained(ema_dir)
+                 update_last_checkpoint(checkpoint_dir)
++                prune_old_checkpoints(
++                    checkpoint_dir,
++                    cfg.checkpoint_keep_last,
++                    cfg.checkpoint_keep_steps,
++                )
+                 if cfg.save_checkpoint_to_hub:
+                     push_checkpoint_to_hub(

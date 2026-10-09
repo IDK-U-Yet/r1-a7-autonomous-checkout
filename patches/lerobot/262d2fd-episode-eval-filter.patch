@@ -1,0 +1,49 @@
+diff --git a/src/lerobot/scripts/lerobot_train.py b/src/lerobot/scripts/lerobot_train.py
+--- a/src/lerobot/scripts/lerobot_train.py
++++ b/src/lerobot/scripts/lerobot_train.py
+@@ -286,7 +286,7 @@ def make_dataloaders(
+     """
+     active_cfg = cfg.trainable_config
++    excluded_ranges = None
+     if not cfg.dataset.streaming:
+-        excluded_ranges = None
+         if cfg.dataset.training_filter_path:
+             filter_path = Path(cfg.dataset.training_filter_path)
+             with filter_path.open(encoding="utf-8") as stream:
+@@ -327,6 +327,27 @@ def make_dataloaders(
+     eval_dataloader = None
+     if eval_dataset is not None:
+         eval_ds = eval_dataset
++        eval_sampler = None
++        if excluded_ranges is not None:
++            if cfg.max_eval_samples > 0:
++                raise ValueError(
++                    "max_eval_samples is incompatible with training_filter_path: "
++                    "subsampling must happen after the filtered eval sampler is implemented"
++                )
++            eval_sampler = EpisodeAwareSampler(
++                eval_dataset.meta.episodes["dataset_from_index"],
++                eval_dataset.meta.episodes["dataset_to_index"],
++                episode_indices_to_use=eval_dataset.episodes,
++                drop_n_last_frames=getattr(active_cfg, "drop_n_last_frames", 0),
++                shuffle=False,
++                absolute_to_relative_idx=eval_dataset.absolute_to_relative_idx,
++                excluded_ranges=excluded_ranges,
++            )
++            if is_main_process():
++                logging.info(
++                    "Validation sampler excludes labelled recovery ranges; %d eval starts remain",
++                    len(eval_sampler),
++                )
+         if cfg.max_eval_samples > 0 and hasattr(eval_dataset, "hf_dataset"):
+             task_arr = eval_dataset.hf_dataset.data.column("task_index").to_numpy()
+             unique_tasks = sorted(set(task_arr.tolist()))
+@@ -337,7 +358,8 @@ def make_dataloaders(
+         eval_dataloader = torch.utils.data.DataLoader(
+             eval_ds,
+             batch_size=cfg.batch_size,
+             shuffle=False,
++            sampler=eval_sampler,
+             num_workers=cfg.num_workers,
+             pin_memory=device_type == "cuda",
+             drop_last=False,

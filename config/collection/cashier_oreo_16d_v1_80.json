@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "batch_id": "cashier_oreo_16d_v1_80",
+  "selection_mode": "ordered",
+  "reset_seconds": 30,
+  "products": [
+    {
+      "barcode": "6901668005939",
+      "sku": "ala-bg-01",
+      "name": "奥利奥",
+      "target_episodes": 80
+    }
+  ]
+}

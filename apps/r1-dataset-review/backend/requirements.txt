@@ -1,0 +1,5 @@
+aiohttp>=3.9,<4
+av>=14
+numpy>=1.26
+Pillow>=10
+pyarrow>=17
